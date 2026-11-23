@@ -21,6 +21,8 @@ jobs:
 
       - name: Android SDK (cmdline-tools + licencias)
         uses: android-actions/setup-android@v3
+        with:
+          packages: ''
 
       - name: Instalar plataforma Android 17 (API 37) y build-tools
         run: |
