@@ -27,11 +27,14 @@ jobs:
       - name: Instalar plataforma Android 17 (API 37) y build-tools
         run: |
           set -e
-          sdkmanager --list 2>/dev/null | grep -o 'platforms;android-37[^ |]*' | sort -uV | tail -n 1 > /tmp/platform.txt
-          sdkmanager --list 2>/dev/null | grep -o 'build-tools;37[^ |]*' | sort -uV | tail -n 1 > /tmp/bt.txt
-          cat /tmp/platform.txt /tmp/bt.txt
-          test -s /tmp/platform.txt && test -s /tmp/bt.txt
-          sdkmanager "$(cat /tmp/platform.txt)" "$(cat /tmp/bt.txt)"
+          sdkmanager --list 2>/dev/null > /tmp/sdk.txt || true
+          # Preferir versiones estables; usar beta/rc solo si no hay otra
+          pick() { grep -o "$1" /tmp/sdk.txt | sort -uV > /tmp/all.txt; (grep -viE 'beta|rc|alpha|preview' /tmp/all.txt || cat /tmp/all.txt) | tail -n 1; }
+          PLATFORM=$(pick 'platforms;android-37[^ |]*')
+          BT=$(pick 'build-tools;37[^ |]*')
+          echo "Plataforma: $PLATFORM / Build-tools: $BT"
+          test -n "$PLATFORM" && test -n "$BT"
+          sdkmanager "$PLATFORM" "$BT"
 
       - name: Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
