@@ -104,6 +104,7 @@ fun SettingsScreen() {
         SwitchRow("Predicción continua", "Interpretar lo escrito sin espacios", Prefs.PREDICTIONS, true)
         SwitchRow("Aprendizaje personal", "Aprender tu vocabulario y tus elecciones (solo en este dispositivo). Desactívalo para pausar.", Prefs.LEARNING, true)
         SwitchRow("Vibración al teclear", "", Prefs.HAPTIC, true)
+        SwitchRow("Registro de depuración", "Guarda cada acción de escritura en memoria (campos protegidos enmascarados). Se inicia y copia con el botón 🐞 del teclado.", Prefs.DEBUG, false)
         Text("Anchura del Beam Search: ${beam.toInt()}", style = MaterialTheme.typography.titleMedium)
         Slider(value = beam, onValueChange = { beam = it }, valueRange = 4f..32f, steps = 27,
             onValueChangeFinished = { Prefs.get(ctx).edit().putInt(Prefs.BEAM, beam.toInt()).apply() })

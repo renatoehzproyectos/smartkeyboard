@@ -50,4 +50,20 @@ class ManualModeTest {
         val (m, _, r) = setup(); m.type("pendiente"); m.setManual(false)
         assertEquals(listOf("pendiente"), r.observed.map { it.second[0] })
     }
+
+    @Test fun debugLogRecordsActionsAndMasksProtectedFields() {
+        val (m, _, _) = setup(); val out = ArrayList<String>()
+        m.debug = true; m.log = { out.add(it) }
+        m.type("hola"); m.onSpace()
+        assertTrue(out.any { it.startsWith("TECLA letra 'h'") })
+        assertTrue(out.any { it.contains("MANUAL aprende 'hola'") })
+        out.clear(); m.policy = FieldPolicy(predict = false, learn = false)
+        m.type("clave"); m.onSpace()
+        assertFalse(out.any { it.contains("clave") }); assertTrue(out.any { it.contains("•••••") })
+    }
+
+    @Test fun debugOffProducesNoLog() {
+        val (m, _, _) = setup(); val out = ArrayList<String>(); m.log = { out.add(it) }
+        m.type("hola"); assertTrue(out.isEmpty())
+    }
 }

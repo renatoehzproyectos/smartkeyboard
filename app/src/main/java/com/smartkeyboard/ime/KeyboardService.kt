@@ -8,6 +8,7 @@ import android.os.Looper
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.inputmethodservice.InputMethodService.Insets
+import com.smartkeyboard.DebugLog
 import com.smartkeyboard.EngineHolder
 import com.smartkeyboard.Prefs
 import com.smartkeyboard.SmartKeyboardApp
@@ -37,6 +38,7 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
         val learning = SmartKeyboardApp.of(this).learning
         manager.learner = learning
         manager.onSuggestions = { keyboard?.setSuggestions(it) }
+        manager.log = { DebugLog.add(it) }
         thread(name = "sk-load") {
             runCatching {
                 val words = assets.open("es_words.txt")
@@ -86,6 +88,9 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
         val predict = field.predict && prefs.getBoolean(Prefs.PREDICTIONS, true)
         val learn = field.learn && prefs.getBoolean(Prefs.LEARNING, true)
         manager.policy = FieldPolicy(predict, learn)
+        val dbg = prefs.getBoolean(Prefs.DEBUG, false)
+        DebugLog.enabled = dbg; manager.debug = dbg; keyboard?.debugOn = dbg
+        DebugLog.add("CAMPO inputType=0x${Integer.toHexString(info.inputType)} ime=0x${Integer.toHexString(info.imeOptions)} app=${if (predict || learn) info.packageName else "(protegido)"} predecir=$predict aprender=$learn reinicio=$restarting")
         val manual = prefs.getBoolean(Prefs.MANUAL, false)
         manager.setManual(manual); keyboard?.manualMode = manual
         (manager.learner as? com.smartkeyboard.learning.LearningEngine)?.enabled = prefs.getBoolean(Prefs.LEARNING, true)
@@ -143,6 +148,19 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
         keyboard?.manualMode = on
         Prefs.get(this).edit().putBoolean(Prefs.MANUAL, on).apply()
         afterKey()
+    }
+    override fun onDebug() {
+        val prefs = Prefs.get(this)
+        if (!DebugLog.enabled) {
+            DebugLog.clear(); DebugLog.enabled = true; manager.debug = true
+            prefs.edit().putBoolean(Prefs.DEBUG, true).apply()
+            keyboard?.debugOn = true
+            DebugLog.add("INICIO del registro")
+            android.widget.Toast.makeText(this, "Registro iniciado. Escribe y toca 🐞 de nuevo para copiarlo.", android.widget.Toast.LENGTH_LONG).show()
+        } else {
+            val n = DebugLog.copy(this)
+            android.widget.Toast.makeText(this, "Registro copiado ($n eventos). Desactívalo en Ajustes.", android.widget.Toast.LENGTH_LONG).show()
+        }
     }
     override fun onHide() { manager.onExternalChange(); requestHideSelf(0) }
     override fun onSwitchKeyboard() {

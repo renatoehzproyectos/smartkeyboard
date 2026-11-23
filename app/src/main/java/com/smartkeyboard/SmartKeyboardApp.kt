@@ -16,6 +16,7 @@ object Prefs {
     const val HAPTIC = "haptic"
     const val BEAM = "beam"
     const val MANUAL = "manual_mode"
+    const val DEBUG = "debug_log"
     fun get(c: Context) = c.applicationContext.getSharedPreferences(NAME, Context.MODE_PRIVATE)
 }
 

@@ -37,10 +37,13 @@ class KeyboardView(context: Context) : View(context) {
         fun onSwitchKeyboard()
         fun onSuggestion(index: Int)
         fun onToggleManual()
+        fun onDebug()
     }
 
     var listener: Listener? = null
     var haptics = true
+    var debugOn = false
+        set(v) { field = v; invalidate() }
     var manualMode = false
         set(v) { field = v; invalidate() }
     var enterLabel: String? = null
@@ -292,12 +295,14 @@ class KeyboardView(context: Context) : View(context) {
         c.drawLine(px - 20f, TOOL_Y + 20f, px + 16f, TOOL_Y - 16f, stroke)
         c.drawLine(px - 24f, TOOL_Y + 24f, px - 12f, TOOL_Y + 22f, stroke)
         c.drawLine(px - 24f, TOOL_Y + 24f, px - 22f, TOOL_Y + 12f, stroke)
-        // 5 · traductor
-        paint.color = w; paint.style = Paint.Style.FILL
-        c.drawRoundRect(TOOL_X[4] - 25f, TOOL_Y - 25f, TOOL_X[4] + 7f, TOOL_Y + 7f, 6f, 6f, paint)
-        txt(c, "G", TOOL_X[4] - 9f, TOOL_Y - 9f, 26f, colors.card, bold = true)
-        strokeStyle(w, 4f); c.drawRoundRect(TOOL_X[4] - 6f, TOOL_Y - 6f, TOOL_X[4] + 25f, TOOL_Y + 25f, 6f, 6f, stroke)
-        txt(c, "文", TOOL_X[4] + 9.5f, TOOL_Y + 10f, 24f, w)
+        // 5 · depuración (bicho): toca para iniciar el registro; con el registro activo, toca para copiarlo
+        val bx = TOOL_X[4]
+        paint.style = Paint.Style.FILL; paint.color = w
+        c.drawOval(RectF(bx - 14f, TOOL_Y - 14f, bx + 14f, TOOL_Y + 24f), paint)
+        c.drawCircle(bx, TOOL_Y - 17f, 9f, paint)
+        strokeStyle(w, 4f)
+        for (dy in intArrayOf(-6, 6, 18)) { c.drawLine(bx - 14f, TOOL_Y + dy, bx - 26f, TOOL_Y + dy - 5f, stroke); c.drawLine(bx + 14f, TOOL_Y + dy, bx + 26f, TOOL_Y + dy - 5f, stroke) }
+        if (debugOn) { paint.color = 0xFFE53935.toInt(); c.drawCircle(bx + 24f, TOOL_Y - 24f, 11f, paint) }
         // 6 · paleta
         paint.style = Paint.Style.FILL; paint.color = w; c.drawCircle(TOOL_X[5], TOOL_Y, 24f, paint)
         paint.color = colors.card
@@ -395,7 +400,7 @@ class KeyboardView(context: Context) : View(context) {
             when {
                 t.startsWith("sug:") -> l.onSuggestion(n)
                 t.startsWith("nav:") -> when (n) { 0 -> l.onHide(); 2 -> l.onSwitchKeyboard() }
-                t.startsWith("tool:") -> when (n) { 2 -> l.onOpenSettings(); 3 -> l.onToggleManual() } // resto de iconos: solo visuales
+                t.startsWith("tool:") -> when (n) { 2 -> l.onOpenSettings(); 3 -> l.onToggleManual(); 4 -> l.onDebug() } // resto de iconos: solo visuales
             }
             return
         }

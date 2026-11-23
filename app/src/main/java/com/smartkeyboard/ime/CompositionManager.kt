@@ -19,6 +19,17 @@ class CompositionManager(
 
     var composing = false; private set
 
+    /** Depuración: si [debug] está activo, cada acción y su resultado se envían a [log]. */
+    var debug = false
+    var log: (String) -> Unit = {}
+    private var lastKeyNs = 0L
+    private inline fun d(f: () -> String) { if (debug) log(f()) }
+    private fun t(s: String) = if (!policy.predict && !policy.learn) "•".repeat(s.length) else s
+    private fun key(name: String) {
+        val n = System.nanoTime(); val dt = if (lastKeyNs == 0L) -1L else (n - lastKeyNs) / 1_000_000; lastKeyNs = n
+        d { "TECLA $name dt=${dt}ms modo=${if (manual) "manual" else "predictivo"} compone=$composing" }
+    }
+
     /** Modo manual: se escribe tal cual (sin predicción ni corrección) y cada palabra terminada se aprende. */
     var manual = false; private set
     private val mbuf = StringBuilder()
@@ -26,6 +37,7 @@ class CompositionManager(
 
     fun setManual(v: Boolean) {
         if (v == manual) return
+        d { "MODO MANUAL ${if (v) "ON" else "OFF"}" }
         if (v) { onExternalChange(); onSuggestions(emptyList()) } else flushManual()
         mbuf.setLength(0); manual = v
     }
@@ -33,6 +45,7 @@ class CompositionManager(
     private fun flushManual() {
         if (mbuf.isEmpty()) return
         val w = mbuf.toString(); mbuf.setLength(0)
+        d { "MANUAL aprende '${t(w)}' ctx='${t(mctx ?: "-")}'" }
         learnerIfOn()?.observe(mctx, listOf(w), LearningEngineWeights.MANUAL)
     }
     private var capFirst = false
@@ -65,6 +78,7 @@ class CompositionManager(
 
     // ---------- entrada ----------
     fun onLetter(c: Char, shift: Boolean) {
+        key("letra '${t(c.toString())}'${if (shift) " +shift" else ""}")
         if (manual) {
             if (mbuf.isEmpty()) mctx = contextWord(sink.textBefore(48))
             val ch = if (shift) c.uppercaseChar() else c
@@ -88,22 +102,26 @@ class CompositionManager(
     }
 
     fun onSpace() {
+        key("espacio")
         if (manual) { flushManual(); sink.commit(" "); return }
         if (composing) finalize("", " ", active = false) else sink.commit(" ")
     }
 
     fun onPunctuation(ch: String) {
+        key("puntuación '${t(ch)}'")
         if (manual) { flushManual(); sink.commit(ch); return }
         if (composing) finalize("", ch, active = false) else sink.commit(ch)
     }
 
     fun onEnter() {
+        key("enter")
         if (manual) { flushManual(); sink.sendEnter(); return }
         if (composing) finalize("", "", active = false)
         sink.sendEnter()
     }
 
     fun onBackspace() {
+        key("borrar")
         if (manual) {
             if (mbuf.isNotEmpty()) mbuf.setLength(mbuf.length - 1)
             sink.sendBackspace(); return
@@ -120,6 +138,7 @@ class CompositionManager(
         val lc = last
         if (lc != null && e != null && policy.predict && clock() - lc.time <= REOPEN_WINDOW_MS && sink.textBefore(lc.text.length) == lc.text) {
             // Reabre la última interpretación para poder reinterpretarla (reversibilidad).
+            d { "REABRE '${t(lc.text)}' (borrar justo tras confirmar)" }
             sink.deleteBefore(lc.text.length)
             e.setContext(lc.context)
             context = lc.context; capFirst = lc.capFirst
@@ -139,6 +158,7 @@ class CompositionManager(
     fun onSuggestion(index: Int) {
         if (!composing) return
         val s = suggestions.getOrNull(index) ?: return
+        key("sugerencia #$index")
         val top = shown
         val text = render(s)
         val rejected = if (index != 0 && top != null) top else null
@@ -151,6 +171,7 @@ class CompositionManager(
         if (manual) { mbuf.setLength(0); return }
         if (!composing) return
         val text = render(shown ?: return)
+        d { "CAMBIO EXTERNO: conserva '${t(text)}' y abandona la composición" }
         learn(shown!!, text, 1)
         sink.finishComposing()
         resetState()
@@ -174,9 +195,12 @@ class CompositionManager(
 
     private fun render() {
         val e = engine ?: return
+        val t0 = System.nanoTime()
         val list = e.interpretations(3)
-        if (list.isEmpty()) return
+        val ms = (System.nanoTime() - t0) / 1_000_000
+        if (list.isEmpty()) { d { "RENDER sin interpretaciones typed='${t(e.typed)}' (${ms}ms)" }; return }
         suggestions = list; shown = list[0]
+        d { "RENDER typed='${t(e.typed)}' muestra='${t(render(list[0]))}' opciones=${list.map { t(render(it)) }} (${ms}ms${if (ms > 50) " LENTO" else ""})" }
         sink.showComposing(render(list[0]))
         onSuggestions(list.map { render(it) })
     }
@@ -187,6 +211,7 @@ class CompositionManager(
         val text = if (chosenText.isNotEmpty()) chosenText else render(interp)
         sink.commit(text + trailing)
         val letters = e.typed
+        d { "CONFIRMA '${t(text)}' escrito='${t(letters)}' ${if (active) "elegida" else "automática"}${if (rejectedTop != null) " rechaza='${t(rejectedTop)}'" else ""}" }
         last = LastCommit(text + trailing, letters, context, capFirst, HashSet(capPositions), clock())
         learn(interp, text, if (active) LearningEngineWeights.ACTIVE else LearningEngineWeights.PASSIVE)
         val from = reopenedFrom
@@ -200,6 +225,7 @@ class CompositionManager(
     private fun learnerIfOn(): Learner? = learner?.takeIf { policy.learn && it.enabled }
 
     private fun learn(interp: Interpretation, text: String, weight: Int) {
+        d { "APRENDE ${interp.words.map { t(it) }} peso=$weight ${if (learnerIfOn() == null) "(bloqueado)" else ""}" }
         learnerIfOn()?.observe(context, interp.words, weight)
     }
 
@@ -213,6 +239,7 @@ class CompositionManager(
         val prefixText = render(Interpretation(top.words.take(k), top.spans.take(k), top.score))
         val consumed = e.commitPrefix(k)
         if (consumed <= 0) return
+        d { "ESTABILIZA '${t(prefixText)}' (composición larga)" }
         sink.commit("$prefixText ")
         learnerIfOn()?.observe(context, prefixWords, LearningEngineWeights.PASSIVE)
         context = prefixWords.last()
