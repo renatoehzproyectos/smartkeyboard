@@ -86,6 +86,8 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
         val predict = field.predict && prefs.getBoolean(Prefs.PREDICTIONS, true)
         val learn = field.learn && prefs.getBoolean(Prefs.LEARNING, true)
         manager.policy = FieldPolicy(predict, learn)
+        val manual = prefs.getBoolean(Prefs.MANUAL, false)
+        manager.setManual(manual); keyboard?.manualMode = manual
         (manager.learner as? com.smartkeyboard.learning.LearningEngine)?.enabled = prefs.getBoolean(Prefs.LEARNING, true)
         engine?.beamWidth = prefs.getInt(Prefs.BEAM, 12)
         keyboard?.haptics = prefs.getBoolean(Prefs.HAPTIC, true)
@@ -135,6 +137,13 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
     override fun onBackspace() { manager.onBackspace(); afterKey() }
     override fun onEnter() { manager.onEnter(); afterKey() }
     override fun onSuggestion(index: Int) { manager.onSuggestion(index); afterKey() }
+    override fun onToggleManual() {
+        val on = !manager.manual
+        manager.setManual(on)
+        keyboard?.manualMode = on
+        Prefs.get(this).edit().putBoolean(Prefs.MANUAL, on).apply()
+        afterKey()
+    }
     override fun onHide() { manager.onExternalChange(); requestHideSelf(0) }
     override fun onSwitchKeyboard() {
         manager.onExternalChange()

@@ -36,10 +36,13 @@ class KeyboardView(context: Context) : View(context) {
         fun onHide()
         fun onSwitchKeyboard()
         fun onSuggestion(index: Int)
+        fun onToggleManual()
     }
 
     var listener: Listener? = null
     var haptics = true
+    var manualMode = false
+        set(v) { field = v; invalidate() }
     var enterLabel: String? = null
         set(v) { field = v; invalidate() }
 
@@ -281,10 +284,14 @@ class KeyboardView(context: Context) : View(context) {
         c.drawArc(RectF(TOOL_X[1] - 11f, TOOL_Y - 6f, TOOL_X[1] + 11f, TOOL_Y + 12f), 20f, 140f, false, stroke)
         // 3 · ajustes (engranaje)
         drawGear(c, TOOL_X[2], TOOL_Y, w)
-        // 4 · varita mágica
-        val g = colors.hint
-        strokeStyle(g, 6f); c.drawLine(TOOL_X[3] - 20f, TOOL_Y + 22f, TOOL_X[3] + 12f, TOOL_Y - 10f, stroke)
-        drawSpark(c, TOOL_X[3] + 14f, TOOL_Y - 14f, 14f, w); drawSpark(c, TOOL_X[3] - 16f, TOOL_Y - 16f, 8f, w); drawSpark(c, TOOL_X[3] + 22f, TOOL_Y + 10f, 7f, w)
+        // 4 · modo manual (lápiz): escribe sin predicción y aprende lo que tecleas
+        val px = TOOL_X[3]
+        if (manualMode) { paint.style = Paint.Style.FILL; paint.color = colors.accent; c.drawCircle(px, TOOL_Y, 40f, paint) }
+        val pen = if (manualMode) colors.card else w
+        strokeStyle(pen, 6f)
+        c.drawLine(px - 20f, TOOL_Y + 20f, px + 16f, TOOL_Y - 16f, stroke)
+        c.drawLine(px - 24f, TOOL_Y + 24f, px - 12f, TOOL_Y + 22f, stroke)
+        c.drawLine(px - 24f, TOOL_Y + 24f, px - 22f, TOOL_Y + 12f, stroke)
         // 5 · traductor
         paint.color = w; paint.style = Paint.Style.FILL
         c.drawRoundRect(TOOL_X[4] - 25f, TOOL_Y - 25f, TOOL_X[4] + 7f, TOOL_Y + 7f, 6f, 6f, paint)
@@ -388,7 +395,7 @@ class KeyboardView(context: Context) : View(context) {
             when {
                 t.startsWith("sug:") -> l.onSuggestion(n)
                 t.startsWith("nav:") -> when (n) { 0 -> l.onHide(); 2 -> l.onSwitchKeyboard() }
-                t.startsWith("tool:") -> if (n == 2) l.onOpenSettings() // resto de iconos: solo visuales
+                t.startsWith("tool:") -> when (n) { 2 -> l.onOpenSettings(); 3 -> l.onToggleManual() } // resto de iconos: solo visuales
             }
             return
         }

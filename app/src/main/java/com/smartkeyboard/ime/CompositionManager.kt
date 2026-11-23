@@ -18,6 +18,23 @@ class CompositionManager(
     var onSuggestions: (List<String>) -> Unit = {}
 
     var composing = false; private set
+
+    /** Modo manual: se escribe tal cual (sin predicción ni corrección) y cada palabra terminada se aprende. */
+    var manual = false; private set
+    private val mbuf = StringBuilder()
+    private var mctx: String? = null
+
+    fun setManual(v: Boolean) {
+        if (v == manual) return
+        if (v) { onExternalChange(); onSuggestions(emptyList()) } else flushManual()
+        mbuf.setLength(0); manual = v
+    }
+
+    private fun flushManual() {
+        if (mbuf.isEmpty()) return
+        val w = mbuf.toString(); mbuf.setLength(0)
+        learnerIfOn()?.observe(mctx, listOf(w), LearningEngineWeights.MANUAL)
+    }
     private var capFirst = false
     private val capPositions = HashSet<Int>()
     private var context: String? = null
@@ -48,6 +65,12 @@ class CompositionManager(
 
     // ---------- entrada ----------
     fun onLetter(c: Char, shift: Boolean) {
+        if (manual) {
+            if (mbuf.isEmpty()) mctx = contextWord(sink.textBefore(48))
+            val ch = if (shift) c.uppercaseChar() else c
+            sink.commit(ch.toString()); mbuf.append(ch)
+            return
+        }
         val e = engine
         if (!policy.predict || e == null) { sink.commit(if (shift) c.uppercaseChar().toString() else c.toString()); return }
         if (!composing) {
@@ -65,19 +88,26 @@ class CompositionManager(
     }
 
     fun onSpace() {
+        if (manual) { flushManual(); sink.commit(" "); return }
         if (composing) finalize("", " ", active = false) else sink.commit(" ")
     }
 
     fun onPunctuation(ch: String) {
+        if (manual) { flushManual(); sink.commit(ch); return }
         if (composing) finalize("", ch, active = false) else sink.commit(ch)
     }
 
     fun onEnter() {
+        if (manual) { flushManual(); sink.sendEnter(); return }
         if (composing) finalize("", "", active = false)
         sink.sendEnter()
     }
 
     fun onBackspace() {
+        if (manual) {
+            if (mbuf.isNotEmpty()) mbuf.setLength(mbuf.length - 1)
+            sink.sendBackspace(); return
+        }
         val e = engine
         if (composing && e != null) {
             e.backspace()
@@ -118,6 +148,7 @@ class CompositionManager(
     // ---------- ciclo de vida ----------
     /** Cursor movido o foco perdido: se conserva lo mostrado, se aprende pasivamente y se abandona la composición. */
     fun onExternalChange() {
+        if (manual) { mbuf.setLength(0); return }
         if (!composing) return
         val text = render(shown ?: return)
         learn(shown!!, text, 1)
@@ -192,4 +223,4 @@ class CompositionManager(
 }
 
 /** Pesos expuestos a la composición sin depender del módulo de aprendizaje. */
-object LearningEngineWeights { const val PASSIVE = 1; const val ACTIVE = 3 }
+object LearningEngineWeights { const val PASSIVE = 1; const val ACTIVE = 3; const val MANUAL = 4 }
