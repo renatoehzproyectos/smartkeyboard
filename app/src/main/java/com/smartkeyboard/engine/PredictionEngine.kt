@@ -13,6 +13,8 @@ class EngineConfig(
     val ghostMinCoherence: Float = 1.5f,
     val ghostWords: List<String> = listOf("una", "un", "de", "la", "el", "en", "que", "los", "las", "y", "a", "para", "con", "por", "del", "al", "mi", "tu", "su"),
     val beamWidth: Int = 12,
+    /** Peso de la concordancia de género/número (0 = desactivada). */
+    val agreementWeight: Float = 1.8f,
     val segmenter: SegmenterConfig = SegmenterConfig(),
 )
 
@@ -29,6 +31,7 @@ class PredictionEngine(
     private val analyzer = ContextAnalyzer(lm, userModel)
     private val segmenter = WordSegmenter(listOf(main), config.segmenter)
     @Volatile private var userLex: Lexicon? = null
+    private val agreement = AgreementModel { segmenter.lexicons }
 
     private val scorer = object : Scorer {
         override fun transition(prev: Word, c: Candidate): Float {
@@ -37,7 +40,8 @@ class PredictionEngine(
             return config.alpha * l +
                 config.beta * analyzer.coherence(prev, w) +
                 config.gamma * w.logP +
-                config.delta * analyzer.personal(prev, w)
+                config.delta * analyzer.personal(prev, w) +
+                config.agreementWeight * agreement.bonus(prev, w)
         }
         override fun coherence(a: Word, b: Word) = analyzer.coherence(a, b)
         override val ghostCost get() = config.ghostCost
@@ -63,6 +67,7 @@ class PredictionEngine(
     fun setUserLexicon(lex: Lexicon?) {
         userLex = lex
         segmenter.lexicons = if (lex == null) listOf(main) else listOf(main, lex)
+        agreement.invalidate()
         replay()
     }
 
@@ -73,6 +78,9 @@ class PredictionEngine(
         }
         return Word(prevLower, Word.LITERAL, -13f, prevLower.length)
     }
+
+    /** Últimas palabras de la frase en curso: fijan el género/número vigente para la concordancia. Llamar antes de [setContext]. */
+    fun setDiscourse(recentWords: List<String>) { agreement.discourse = SpanishMorph.contextFrom(recentWords) }
 
     /** Palabra anterior ya confirmada (null = inicio de frase). Reinicia la composición. */
     fun setContext(prevWord: String?) {

@@ -77,6 +77,12 @@ class CompositionManager(
         private const val CLOSING_PUNCT = ".,;:!?)"
         private const val SENTENCE_END = ".!?¿¡:;\n"
 
+        /** Últimas palabras de la frase en curso (máx. [n]) a partir del texto previo al cursor. */
+        fun recentWords(before: String, n: Int = 10): List<String> {
+            val sentence = before.takeLastWhile { it !in SENTENCE_END }
+            return Regex("\\p{L}+").findAll(sentence).map { it.value.lowercase() }.toList().takeLast(n)
+        }
+
         /** Palabra anterior a partir del texto previo al cursor (null = inicio de frase o contexto desconocido). */
         fun contextWord(before: String): String? {
             if (before.isEmpty()) return null
@@ -102,8 +108,9 @@ class CompositionManager(
         val e = engine
         if (!policy.predict || e == null) { sink.commit(if (shift) c.uppercaseChar().toString() else c.toString()); return }
         if (!composing) {
-            val before = sink.textBefore(48)
-            context = contextWord(before)
+            val before = sink.textBefore(120)
+            context = contextWord(before.takeLast(48))
+            e.setDiscourse(recentWords(before))
             e.setContext(context)
             capFirst = shift || sink.autoCapitalize()
             capPositions.clear()
@@ -163,6 +170,7 @@ class CompositionManager(
             // Reabre la última interpretación para poder reinterpretarla (reversibilidad).
             d { "REABRE '${t(lc.text)}' (borrar justo tras confirmar)" }
             sink.deleteBefore(lc.text.length)
+            e.setDiscourse(recentWords(sink.textBefore(120)))
             e.setContext(lc.context)
             context = lc.context; capFirst = lc.capFirst
             capPositions.clear(); capPositions.addAll(lc.caps)
