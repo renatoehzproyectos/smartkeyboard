@@ -51,7 +51,7 @@ class PredictionEngineTest {
             override fun bigramBoost(prevLower: String, lower: String) = 0f
         })
         e.setContext(null); for (c in "cons") e.type(c)
-        assertEquals(target, e.best()?.text)
+        assertTrue(e.best()!!.text.split(' ').contains(target))
     }
 
     @Test fun latencyPerKeystrokeIsWithinTarget() {

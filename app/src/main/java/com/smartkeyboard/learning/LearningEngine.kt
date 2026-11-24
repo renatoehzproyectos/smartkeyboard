@@ -51,6 +51,14 @@ class LearningEngine(
         publishVocabulary()
     }
 
+    /** Evita que teclazos (p. ej. «fhhg») entren al vocabulario: debe tener vocal, sin 3 letras iguales seguidas y al menos 2 letras. */
+    private fun plausible(w: String): Boolean {
+        if (w.length < 2 || w.any { !it.isLetter() }) return false
+        if (w.none { it in "aeiouáéíóúüy" }) return false
+        for (i in 2 until w.length) if (w[i] == w[i - 1] && w[i] == w[i - 2]) return false
+        return true
+    }
+
     private fun markPhrase(p: String) {
         val w = p.split(' ')
         for (i in 0 until w.size - 1) phrasePairs.merge(w[i] + " " + w[i + 1], 1, Int::plus)
@@ -83,7 +91,7 @@ class LearningEngine(
             clean.add(w)
             uni.merge(w, weight, Int::plus)
             runIo { store.bumpFreq(w, weight) }
-            if (!isKnownWord(w)) {
+            if (!isKnownWord(w) && plausible(w)) {
                 if (vocabulary.add(w, weight)) vocabChanged = true
                 runIo { store.bumpUserWord(w, weight) }
             }

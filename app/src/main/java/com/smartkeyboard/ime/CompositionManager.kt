@@ -115,6 +115,7 @@ class CompositionManager(
 
     fun onEnter() {
         key("enter")
+        if (!manual && composing && isPureCompletion()) { confirmTypedLiteral(); sink.sendEnter(); return }
         if (manual) { flushManual(); sink.sendEnter(); return }
         if (composing) finalize("", "", active = false)
         sink.sendEnter()
@@ -182,7 +183,38 @@ class CompositionManager(
     // ---------- internos ----------
     private fun resetState() { composing = false; shown = null; suggestions = emptyList(); capPositions.clear(); reopenedFrom = null; engine?.clear() }
 
+    /** La interpretación mostrada añade letras que no se tecleaban (completación o palabra implícita): p. ej. «tes» → «testigos». */
+    private fun isPureCompletion(): Boolean {
+        val e = engine ?: return false
+        val top = shown ?: return false
+        val letters = top.words.sumOf { com.smartkeyboard.engine.TextNorm.key(it).length }
+        return letters != e.typed.length
+    }
+
+    /** Enter confirma lo escrito tal cual (o su versión exacta/acentuada), sin completar: evita enviar palabras que no tecleaste. */
+    private fun confirmTypedLiteral() {
+        val e = engine ?: return
+        val typed = e.typed.lowercase()
+        val key = com.smartkeyboard.engine.TextNorm.key(typed)
+        val exact = suggestions.firstOrNull { it.words.size == 1 && com.smartkeyboard.engine.TextNorm.key(it.words[0]).equals(key, true) }
+            ?: Interpretation(listOf(typed), listOf(typed.indices), 0f)
+        d { "ENTER confirma literal '${t(render(exact))}' (la predicción era '${t(shown?.let { render(it) } ?: "")}')" }
+        finalize(render(exact), "", active = false, chosen = exact)
+    }
+
     private fun capitalize(w: String) = if (w.isEmpty()) w else w.substring(0, 1).uppercase() + w.substring(1)
+
+    /** Las 3 opciones visibles: si lo tecleado es una palabra válida (o ninguna opción lo refleja), siempre se ofrece. */
+    private fun withTyped(e: PredictionEngine, all: List<Interpretation>): List<Interpretation> {
+        val top = all.take(3)
+        val typed = e.typed.lowercase()
+        if (typed.isEmpty() || top.size < 2) return top
+        val key = com.smartkeyboard.engine.TextNorm.key(typed)
+        fun same(i: Interpretation) = com.smartkeyboard.engine.TextNorm.key(i.words.joinToString("")).equals(key, true) && i.words.size == 1
+        if (top.any(::same)) return top
+        val exact = all.drop(3).firstOrNull(::same) ?: Interpretation(listOf(typed), listOf(typed.indices), 0f)
+        return top.take(2) + exact
+    }
 
     private fun render(i: Interpretation): String {
         val words = i.words.mapIndexed { idx, w ->
@@ -196,7 +228,7 @@ class CompositionManager(
     private fun render() {
         val e = engine ?: return
         val t0 = System.nanoTime()
-        val list = e.interpretations(3)
+        val list = withTyped(e, e.interpretations(8))
         val ms = (System.nanoTime() - t0) / 1_000_000
         if (list.isEmpty()) { d { "RENDER sin interpretaciones typed='${t(e.typed)}' (${ms}ms)" }; return }
         suggestions = list; shown = list[0]
@@ -250,4 +282,4 @@ class CompositionManager(
 }
 
 /** Pesos expuestos a la composición sin depender del módulo de aprendizaje. */
-object LearningEngineWeights { const val PASSIVE = 1; const val ACTIVE = 3; const val MANUAL = 4 }
+object LearningEngineWeights { const val PASSIVE = 1; const val ACTIVE = 3; const val MANUAL = 3 }

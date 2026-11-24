@@ -7,6 +7,8 @@ class EngineConfig(
     val gamma: Float = 0.85f,
     val delta: Float = 1f,
     val missingLetterCost: Float = 0.35f,
+    /** Penalización por letra que falta que se mantiene incluso en el último tramo: una palabra completa tecleada gana a sus completaciones. */
+    val completionKeep: Float = 1.0f,
     val ghostCost: Float = 2.5f,
     val ghostMinCoherence: Float = 1.5f,
     val ghostWords: List<String> = listOf("una", "un", "de", "la", "el", "en", "que", "los", "las", "y", "a", "para", "con", "por", "del", "al", "mi", "tu", "su"),
@@ -40,7 +42,7 @@ class PredictionEngine(
         override fun coherence(a: Word, b: Word) = analyzer.coherence(a, b)
         override val ghostCost get() = config.ghostCost
         override val ghostMinCoherence get() = config.ghostMinCoherence
-        override fun finalAdjust(c: Candidate) = config.alpha * (c.missing * config.missingLetterCost + c.abbrev)
+        override fun finalAdjust(c: Candidate) = config.alpha * (c.missing * config.missingLetterCost * (1f - config.completionKeep) + c.abbrev)
     }
     private val beam = BeamSearch(segmenter, scorer, beamWidth = config.beamWidth)
     private var context: Word = Word.START
