@@ -61,6 +61,7 @@ class CompositionManager(
     companion object {
         const val STABILIZE_LETTERS = 32
         const val REOPEN_WINDOW_MS = 10_000L
+        private const val CLOSING_PUNCT = ".,;:!?)"
         private const val SENTENCE_END = ".!?¿¡:;\n"
 
         /** Palabra anterior a partir del texto previo al cursor (null = inicio de frase o contexto desconocido). */
@@ -110,6 +111,14 @@ class CompositionManager(
     fun onPunctuation(ch: String) {
         key("puntuación '${t(ch)}'")
         if (manual) { flushManual(); sink.commit(ch); return }
+        if (!composing && ch.length == 1 && ch[0] in CLOSING_PUNCT && policy.predict) {
+            // «palabra␣» + «,» → «palabra,»: el espacio automático se retira antes de cerrar con puntuación.
+            val b = sink.textBefore(2)
+            if (b.length == 2 && b[1] == ' ' && b[0].isLetterOrDigit()) {
+                d { "PUNTUACIÓN '${t(ch)}' retira el espacio automático previo" }
+                sink.deleteBefore(1); last = null
+            }
+        }
         if (composing) finalize("", ch, active = false) else sink.commit(ch)
     }
 
@@ -206,11 +215,15 @@ class CompositionManager(
 
     /** Las 3 opciones visibles: si lo tecleado es una palabra válida (o ninguna opción lo refleja), siempre se ofrece. */
     private fun withTyped(e: PredictionEngine, all: List<Interpretation>): List<Interpretation> {
-        val top = all.take(3)
         val typed = e.typed.lowercase()
-        if (typed.isEmpty() || top.size < 2) return top
+        if (typed.isEmpty()) return all.take(3)
         val key = com.smartkeyboard.engine.TextNorm.key(typed)
-        fun same(i: Interpretation) = com.smartkeyboard.engine.TextNorm.key(i.words.joinToString("")).equals(key, true) && i.words.size == 1
+        fun same(i: Interpretation) = i.words.size == 1 && com.smartkeyboard.engine.TextNorm.key(i.words[0]).equals(key, true)
+        // Lo que tecleaste manda: si es una palabra completa válida, va primero (antes que «de las» para «del», «rayos» para «rayo»…).
+        val exactWord = all.firstOrNull { same(it) && e.isKnownWord(it.words[0]) }
+        if (exactWord != null) return (listOf(exactWord) + all.filter { it !== exactWord }).take(3)
+        val top = all.take(3)
+        if (top.size < 2) return top
         if (top.any(::same)) return top
         val exact = all.drop(3).firstOrNull(::same) ?: Interpretation(listOf(typed), listOf(typed.indices), 0f)
         return top.take(2) + exact

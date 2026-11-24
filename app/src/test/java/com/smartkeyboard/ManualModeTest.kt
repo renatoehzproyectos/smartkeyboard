@@ -96,4 +96,28 @@ class ManualModeTest {
         l.observe(null, listOf("fhhg", "aaa", "testear"), 3)
         assertEquals(1, l.vocabulary.size())
     }
+
+    // ---- Segundo log real ----
+    @Test fun completeValidWordIsFirstEvenIfACompletionIsMoreFrequent() {
+        for (w in listOf("rayo", "sol", "canta", "termina", "nace", "del", "al", "la")) {
+            val (m, s, _) = predictive(); var shown = emptyList<String>(); m.onSuggestions = { shown = it }
+            m.type(w)
+            assertTrue("$w -> $shown", shown.isNotEmpty() && shown[0].equals(w, true))
+            m.onSpace(); assertEquals("$w -> ${s.text}", w + " ", s.text.lowercase())
+        }
+    }
+
+    @Test fun prefixesStillCompleteWhenNotAWord() {
+        val (m, s, _) = predictive(); m.type("recor"); m.onSpace()
+        assertTrue(s.text, s.text.length > 6)
+    }
+
+    @Test fun commaRemovesTheAutomaticSpaceBeforeIt() {
+        val (m, s, _) = predictive(); m.type("hola"); m.onSpace(); m.onPunctuation(",")
+        assertEquals("hola,", s.text)
+    }
+
+    @Test fun punctuationAfterRealSpaceBetweenWordsKeepsText() {
+        val (m, s, _) = predictive(); m.onPunctuation("("); assertEquals("(", s.text)
+    }
 }

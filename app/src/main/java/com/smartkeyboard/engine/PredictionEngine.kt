@@ -54,6 +54,9 @@ class PredictionEngine(
         get() = beam.beamWidth
         set(v) { beam.beamWidth = v.coerceIn(2, 64) }
 
+    /** ¿Es una palabra completa del léxico principal o del vocabulario personal? */
+    fun isKnownWord(w: String): Boolean = segmenter.lexicons.any { it.contains(w.lowercase()) }
+
     fun setUserModel(m: UserModel) { analyzer.user = m }
 
     /** Léxico de vocabulario personal (ids a partir de main.size). Reconstruir al aprender palabras nuevas. */
