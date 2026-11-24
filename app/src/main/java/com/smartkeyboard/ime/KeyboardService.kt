@@ -19,6 +19,7 @@ import com.smartkeyboard.ui.SettingsActivity
 import com.smartkeyboard.engine.Lexicon
 import com.smartkeyboard.engine.NgramLanguageModel
 import kotlin.concurrent.thread
+import kotlin.math.min
 
 class KeyboardService : InputMethodService(), KeyboardView.Listener {
     private lateinit var manager: CompositionManager
@@ -101,6 +102,7 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
         keyboard?.resetState()
         if (!restarting) manager.reset()
         keyboard?.setSuggestions(emptyList())
+        updatePreview(); schedulePreview()
     }
 
     private fun enterLabelFor(info: EditorInfo): String? = when (info.imeOptions and EditorInfo.IME_MASK_ACTION) {
@@ -120,6 +122,7 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
     override fun onUpdateSelection(oldSelStart: Int, oldSelEnd: Int, newSelStart: Int, newSelEnd: Int, candidatesStart: Int, candidatesEnd: Int) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
         selStart = newSelStart; selEnd = newSelEnd; candStart = candidatesStart; candEnd = candidatesEnd
+        schedulePreview()
         if (manager.composing && !checkPending && (candidatesStart < 0 || newSelStart != candidatesEnd || newSelEnd != candidatesEnd)) {
             // Las notificaciones llegan con retraso: se vuelve a comprobar con el estado más reciente antes de abandonar la composición.
             checkPending = true
@@ -131,7 +134,22 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
     }
 
     // ---- KeyboardView.Listener ----
-    private fun afterKey() { keyboard?.setAutoShift(controller.autoCapitalize()) }
+    private fun afterKey() { keyboard?.setAutoShift(controller.autoCapitalize()); updatePreview(); schedulePreview() }
+
+    private val previewTask = Runnable { updatePreview() }
+    /** Segunda lectura breve después: las ediciones llegan al campo con un pequeño retraso. */
+    private fun schedulePreview() { ui.removeCallbacks(previewTask); ui.postDelayed(previewTask, 70) }
+
+    private fun updatePreview() {
+        val kb = keyboard ?: return
+        val enabled = Prefs.get(this).getBoolean(Prefs.PREVIEW, true)
+        if (!enabled || !manager.previewAllowed) { kb.setPreview("", 0, false); return }
+        val comp = manager.composingText
+        val before = controller.textBefore(80)
+        val tail = (if (comp.isNotEmpty() && before.endsWith(comp)) before.dropLast(comp.length) else before).substringAfterLast('\n')
+        val text = (tail + comp).takeLast(60)
+        kb.setPreview(text, min(comp.length, text.length), true)
+    }
 
     override fun onChar(c: Char, shifted: Boolean) {
         if (com.smartkeyboard.engine.TextNorm.isTypable(c)) manager.onLetter(c, shifted) else manager.onPunctuation(c.toString())

@@ -19,6 +19,12 @@ class CompositionManager(
 
     var composing = false; private set
 
+    /** Texto que se muestra ahora mismo como composición provisional (vacío si no se está componiendo). */
+    val composingText: String get() = if (composing) shown?.let { render(it) } ?: "" else ""
+
+    /** La vista previa no se muestra en campos protegidos (contraseñas, códigos, etc.). */
+    val previewAllowed: Boolean get() = policy.predict || policy.learn
+
     /** Depuración: si [debug] está activo, cada acción y su resultado se envían a [log]. */
     var debug = false
     var log: (String) -> Unit = {}
@@ -222,6 +228,16 @@ class CompositionManager(
         // Lo que tecleaste manda: si es una palabra completa válida, va primero (antes que «de las» para «del», «rayos» para «rayo»…).
         val exactWord = all.firstOrNull { same(it) && e.isKnownWord(it.words[0]) }
         if (exactWord != null) return (listOf(exactWord) + all.filter { it !== exactWord }).take(3)
+        // Con 1–3 letras, una sola palabra es casi siempre mejor apuesta que dos («des» → «desde», no «de su»).
+        if (typed.length <= 3 && (all.firstOrNull()?.words?.size ?: 1) > 1) {
+            val single = all.firstOrNull { it.words.size == 1 }
+            if (single != null) {
+                val ordered = listOf(single) + all.filter { it !== single }
+                val literal = all.firstOrNull(::same) ?: Interpretation(listOf(typed), listOf(typed.indices), 0f)
+                val top3 = ordered.take(3)
+                return if (top3.any(::same)) top3 else top3.take(2) + literal
+            }
+        }
         val top = all.take(3)
         if (top.size < 2) return top
         if (top.any(::same)) return top

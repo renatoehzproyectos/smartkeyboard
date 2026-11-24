@@ -120,4 +120,11 @@ class ManualModeTest {
     @Test fun punctuationAfterRealSpaceBetweenWordsKeepsText() {
         val (m, s, _) = predictive(); m.onPunctuation("("); assertEquals("(", s.text)
     }
+
+    @Test fun shortPrefixesPreferASingleWordOverATwoWordGuess() {
+        for (w in listOf("des", "esc", "sua", "aq")) {
+            val (m, _, _) = predictive(); var shown = emptyList<String>(); m.onSuggestions = { shown = it }
+            m.type(w); assertTrue("$w -> $shown", shown.isNotEmpty() && !shown[0].contains(' '))
+        }
+    }
 }

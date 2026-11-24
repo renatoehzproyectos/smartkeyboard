@@ -115,6 +115,19 @@ class KeyboardView(context: Context) : View(context) {
     private var colors = ThemeManager.colors(context)
     private var suggestions: List<String> = emptyList()
 
+    private val density = resources.displayMetrics.density
+    private val strip = PreviewStrip(density)
+    private val stripRect = RectF()
+    private val stripH get() = 54f * density
+    private val stripGap get() = 8f * density
+
+    /** Vista previa sobre el teclado: texto reciente + palabra en curso ([composingLen] últimas letras). */
+    fun setPreview(text: String, composingLen: Int, allowed: Boolean) {
+        strip.setAllowed(allowed)
+        strip.setText(if (allowed) text else "", composingLen, SystemClock.uptimeMillis())
+        invalidate()
+    }
+
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
     private val handler = Handler(Looper.getMainLooper())
@@ -155,7 +168,7 @@ class KeyboardView(context: Context) : View(context) {
     override fun onMeasure(wSpec: Int, hSpec: Int) {
         val (_, sh) = screen()
         val top = cardOnScreen().top
-        setMeasuredDimension(MeasureSpec.getSize(wSpec), (sh - top + extra).toInt())
+        setMeasuredDimension(MeasureSpec.getSize(wSpec), (sh - top + extra + stripH + stripGap).toInt())
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
@@ -192,6 +205,11 @@ class KeyboardView(context: Context) : View(context) {
         for (k in layouts.getValue(layer)) drawKey(canvas, k)
         drawNav(canvas)
         canvas.restore()
+        val bottom = (cardRect.top - stripGap).coerceAtLeast(stripH)
+        stripRect.set(cardRect.left, bottom - stripH, cardRect.right, bottom)
+        if (strip.draw(canvas, stripRect, colors, SystemClock.uptimeMillis())) {
+            postInvalidateOnAnimation(stripRect.left.toInt() - 4, stripRect.top.toInt() - 4, stripRect.right.toInt() + 4, stripRect.bottom.toInt() + 8)
+        }
     }
 
     private fun txt(c: Canvas, s: String, cx: Float, cy: Float, size: Float, color: Int, bold: Boolean = false, align: Paint.Align = Paint.Align.CENTER) {

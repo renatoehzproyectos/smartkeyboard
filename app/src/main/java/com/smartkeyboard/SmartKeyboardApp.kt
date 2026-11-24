@@ -17,6 +17,7 @@ object Prefs {
     const val BEAM = "beam"
     const val MANUAL = "manual_mode"
     const val DEBUG = "debug_log"
+    const val PREVIEW = "preview_strip"
     fun get(c: Context) = c.applicationContext.getSharedPreferences(NAME, Context.MODE_PRIVATE)
 }
 
