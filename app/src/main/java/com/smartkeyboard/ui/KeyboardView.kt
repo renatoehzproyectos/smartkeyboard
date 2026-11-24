@@ -122,9 +122,9 @@ class KeyboardView(context: Context) : View(context) {
     private val stripGap get() = 8f * density
 
     /** Vista previa sobre el teclado: texto reciente + palabra en curso ([composingLen] últimas letras). */
-    fun setPreview(text: String, composingLen: Int, allowed: Boolean) {
+    fun setPreview(text: String, compStart: Int, ghostStart: Int, allowed: Boolean) {
         strip.setAllowed(allowed)
-        strip.setText(if (allowed) text else "", composingLen, SystemClock.uptimeMillis())
+        strip.setText(if (allowed) text else "", compStart, ghostStart, SystemClock.uptimeMillis())
         invalidate()
     }
 

@@ -25,8 +25,8 @@ class PreviewStrip(private val density: Float) {
 
     fun setAllowed(v: Boolean) { targetVisible = if (v) 1f else 0f }
 
-    fun setText(text: String, compLen: Int, now: Long) {
-        model.update(text, compLen, now)
+    fun setText(text: String, compStart: Int, ghostStart: Int, now: Long) {
+        model.update(text, compStart, ghostStart, now)
         last = 0L // evita un salto de tiempo tras un periodo sin dibujar
     }
 
@@ -69,10 +69,10 @@ class PreviewStrip(private val density: Float) {
         val edge = 30f * density
         fun glyph(g: PreviewModel.Glyph) {
             val gx = left + g.x - model.scroll
-            val fadeL = ((gx - left) / edge).coerceIn(0f, 1f)
-            val a = g.alpha * fadeL * visible
+            val fade = min(((gx - left) / edge).coerceIn(0f, 1f), ((right - gx) / edge).coerceIn(0f, 1f))
+            val a = g.alpha * fade * visible * g.emph
             if (a < 0.01f) return
-            tp.color = withA(mix(col.hint, col.text, g.comp), a)
+            tp.color = withA(col.text, a)
             c.drawText(g.ch.toString(), gx, base + g.dy * density / 2f, tp)
         }
         for (g in model.dying) glyph(g)

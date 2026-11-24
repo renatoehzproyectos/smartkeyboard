@@ -19,6 +19,7 @@ import com.smartkeyboard.ui.SettingsActivity
 import com.smartkeyboard.engine.Lexicon
 import com.smartkeyboard.engine.NgramLanguageModel
 import kotlin.concurrent.thread
+import kotlin.math.max
 import kotlin.math.min
 
 class KeyboardService : InputMethodService(), KeyboardView.Listener {
@@ -143,12 +144,16 @@ class KeyboardService : InputMethodService(), KeyboardView.Listener {
     private fun updatePreview() {
         val kb = keyboard ?: return
         val enabled = Prefs.get(this).getBoolean(Prefs.PREVIEW, true)
-        if (!enabled || !manager.previewAllowed) { kb.setPreview("", 0, false); return }
-        val comp = manager.composingText
+        if (!enabled || !manager.previewAllowed) { kb.setPreview("", 0, 0, false); return }
+        val (solid, ghost) = manager.composingParts
+        val comp = solid + ghost
         val before = controller.textBefore(80)
         val tail = (if (comp.isNotEmpty() && before.endsWith(comp)) before.dropLast(comp.length) else before).substringAfterLast('\n')
-        val text = (tail + comp).takeLast(60)
-        kb.setPreview(text, min(comp.length, text.length), true)
+        val full = tail + comp
+        val cut = max(0, full.length - 60)
+        val text = full.substring(cut)
+        val compStart = max(0, tail.length - cut)
+        kb.setPreview(text, compStart, min(text.length, compStart + solid.length), true)
     }
 
     override fun onChar(c: Char, shifted: Boolean) {

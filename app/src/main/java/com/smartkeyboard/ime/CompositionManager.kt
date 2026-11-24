@@ -22,6 +22,13 @@ class CompositionManager(
     /** Texto que se muestra ahora mismo como composición provisional (vacío si no se está componiendo). */
     val composingText: String get() = if (composing) shown?.let { render(it) } ?: "" else ""
 
+    /** (tecleado, predicho): p. ej. «got» + «as». Todo tecleado si la predicción no continúa lo escrito. */
+    val composingParts: Pair<String, String> get() {
+        if (!composing) return "" to ""
+        val s = shown ?: return "" to ""
+        return PreviewSplit.split(render(s), engine?.typed ?: "")
+    }
+
     /** La vista previa no se muestra en campos protegidos (contraseñas, códigos, etc.). */
     val previewAllowed: Boolean get() = policy.predict || policy.learn
 
